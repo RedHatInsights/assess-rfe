@@ -29,24 +29,22 @@ RFEs ideally map to ~1 RHAISTRAT feature.
 3. Open to HOW — Leaves architecture to engineering?
    Customer-facing surfaces (API endpoints, CLI flags, CRD fields, UI elements) are WHAT. Internal architecture (pipeline design, database choices, repos, language choices) is HOW.
 
-   The following are established RHOAI platform technologies (as of 3.4). Referencing them is platform vocabulary, not architecture prescription:
-   - Platform: RHOAI Operator, ODH Dashboard, OpenShift, OLM
-   - Serving: KServe, vLLM, llm-d, ModelMesh, OpenVINO, MLServer, inference runtimes
-   - Training: Kubeflow Training Operator/Trainer, KubeRay, Ray, CodeFlare, Spark Operator
-   - Pipelines: Data Science Pipelines, Argo Workflows, KFP components
-   - Registry & tracking: Model Registry, MLflow, ML Metadata, Model Catalog
-   - Safety & eval: TrustyAI, EvalHub, LM Eval Harness, Guardrails Orchestrator, NeMo Guardrails, Garak
-   - AI frameworks: Llama Stack (operator + distribution), Feast (feature store)
-   - Inference optimization: llm-d scheduler, KV-cache, Batch Gateway, Workload-Variant Autoscaler
-   - Workloads: Kueue, distributed workloads
-   - Workbenches: Jupyter, VS Code/Code-Server, RStudio, notebook controller
-   - Networking: Istio/Service Mesh, Gateway API, OpenShift Routes
-   - Monitoring: Prometheus, ServiceMonitors, PodMonitors, Alertmanager
-   - Auth: Authorino, OAuth Proxy, kube-auth-proxy, RBAC
-   - Storage: S3, PVCs, ModelCar/OCI artifacts, container registries
-   - Infrastructure: MaaS, Konflux builds
+   The following are established OpenShift platform technologies. Referencing them is platform vocabulary, not architecture prescription:
+   - Platform lifecycle: Cluster Version Operator (CVO), update graphs/channels, OLM (v0/v1), OperatorHub, Konflux builds, IPI/UPI/Agent-based/Assisted installers, Hive, HyperShift/Hosted Control Planes, MicroShift
+   - Control plane: kube-apiserver, openshift-apiserver, oauth-apiserver, etcd, kube-controller-manager, kube-scheduler, secondary scheduler, descheduler
+   - Node & machine management: Machine API (MachineSet/MachineHealthCheck), Cluster API (CAPI) providers, Machine Config Operator, RHCOS, CRI-O, kubelet, Cluster Autoscaler, Karpenter, Windows Machine Config Operator, bare-metal/Metal3/Ironic, multi-arch node placement
+   - Networking: OVN-Kubernetes, Multus, SR-IOV, Ingress Operator/Router, DNS Operator, Network Operator, MetalLB, Gateway API, EgressIP/EgressFirewall, external-dns, network observability (eBPF agent, flow logs, console plugin)
+   - Storage: CSI drivers, Local Storage Operator, LVM Operator, OpenShift Data Foundation/Ceph, shared-resource CSI, Velero/OADP backup and restore
+   - Auth & security: OAuth server, RBAC, Security Context Constraints, cert-manager, external-secrets, Compliance Operator, File Integrity Operator, SPIFFE/SPIRE workload identity
+   - Monitoring & observability: Cluster Monitoring Operator (Prometheus/Alertmanager/Thanos), custom metrics autoscaling, distributed tracing/OpenTelemetry, route/uptime monitoring
+   - Logging: Cluster Logging Operator, Loki, Vector
+   - Build & developer workflow: Source-to-Image, BuildConfig, ImageStreams, integrated image registry, OpenShift Pipelines (Tekton), OpenShift GitOps (Argo CD)
+   - Extensibility: OLM, Operator SDK, ClusterServiceVersion, CatalogSource, console dynamic plugins
+   - Multi-cluster/fleet: Advanced Cluster Management, Hive, Submariner, managed-service SRE tooling (upgrade automation, validating webhooks, notifications)
+   - Service mesh & serverless: OpenShift Service Mesh/Istio, OpenShift Serverless/Knative, Knative Functions
+   - Console & CLI: OpenShift Console, console dynamic plugins, oc
 
-   Describing what a product does (e.g., "disaggregated prefill/decode" for llm-d) is WHAT.
+   Describing what a component does (e.g., "disaggregated ingress and egress traffic paths" for OVN-Kubernetes) is WHAT.
 
    Describing UI behavior using common vocabulary (dropdown, toggle, checkbox, input field, wizard, modal, sidebar) is WHAT — it's how people communicate about user-facing surfaces, not architecture.
 
@@ -54,15 +52,15 @@ RFEs ideally map to ~1 RHAISTRAT feature.
 
    Referencing these technologies is not *automatically* prescriptive, but mandating which platform component should solve a given problem (when alternatives exist) is still an architecture decision.
 
-   Exception: when the customer need is specifically tied to a named technology (e.g., "customers need MLflow Evaluation API support"), naming it is WHAT — the customer need IS that technology.
+   Exception: when the customer need is specifically tied to a named technology (e.g., "customers need Gateway API-based traffic splitting"), naming it is WHAT — the customer need IS that technology.
 
    Technologies not on the platform vocabulary list:
-   - Naming as "the solution" is prescriptive (H=0-1): "Build this using KALE"
-   - Naming as a candidate to evaluate is acceptable (H=2): "Engineering should evaluate KALE, Elyra, and other approaches"
-   - Naming as the customer need itself is WHAT (H=2): "Customers need Katib-based hyperparameter tuning" — but only when customers specifically require that technology, not when the PM chose it
+   - Naming as "the solution" is prescriptive (H=0-1): "Build this using Crossplane"
+   - Naming as a candidate to evaluate is acceptable (H=2): "Engineering should evaluate Crossplane, Config Connector, and other approaches"
+   - Naming as the customer need itself is WHAT (H=2): "Customers need Argo Rollouts-based canary deployments" — but only when customers specifically require that technology, not when the PM chose it
    The test: if you removed the technology name and described the capability generically, would the RFE still make sense? If yes, the name is a solution choice. If no, it's the need itself.
 
-   Functional requirements phrased as "[verb] [object]" are WHAT when they describe observable outcomes ("identify paraphrased content," "detect drift between versions") and HOW when they prescribe algorithmic approaches ("parse traces using span labeling," "cluster errors by similarity metrics," "calculate distribution divergence using KL divergence"). The test: could engineering achieve the same outcome using a completely different technique? If yes, describe the outcome, not the technique.
+   Functional requirements phrased as "[verb] [object]" are WHAT when they describe observable outcomes ("detect configuration drift," "identify nodes at risk of resource exhaustion") and HOW when they prescribe algorithmic approaches ("diff live and desired state using a custom JSON-patch reconciliation loop," "compute exhaustion risk using a weighted moving average over kubelet metrics"). The test: could engineering achieve the same outcome using a completely different technique? If yes, describe the outcome, not the technique.
 
    Implementation details presented as non-prescriptive context are acceptable. When an RFE provides implementation details explicitly framed as reference or prior art ("engineering should determine the approach; the following is provided as context"), score based on whether engineering retains genuine freedom to choose a different approach. Context that informs without constraining is not prescriptive. The test: does the RFE still make sense if you ignore the context section entirely? If the business need stands on its own and the implementation details are supplementary, the framing is successful.
 
@@ -120,14 +118,14 @@ RFEs ideally map to ~1 RHAISTRAT feature.
 
 #### HOW
 - H=0: "Create a plugin architecture with DB migration scripts and a new microservice in the foo-service repo." → Mandates internal architecture.
-- H=1: "Propose a shorter-term solution: package a second image with models baked in. Longer term: enable external provider configuration." → Suggests specific approaches but doesn't fully mandate.
-- H=2: "Deploy models using llm-d with external route exposure, matching existing KServe serving runtime behavior." → Platform vocabulary, not architecture prescription.
-- H=2: "Users can explicitly clear their vector database state and start fresh." → Describes the need without prescribing implementation.
-- H=2: "Expose REST API endpoints for programmatic model creation." → API surface is WHAT, not architecture.
-- H=2: "Detect when model behavior has changed from its baseline." → Observable outcome. Engineering chooses the detection method.
-- H=1: "Parse MLflow traces for tool-call spans and cluster common errors by similarity." → Prescribes the technique (span parsing, similarity clustering) rather than the outcome (identify tool-call failure patterns).
-- H=2: "Users need notebook-to-pipeline conversion without writing pipeline code. Context: KALE and Elyra are upstream projects that address this; engineering should evaluate these and other approaches." → Need is clear without the context. Engineering is free to choose.
-- H=1: "Build KALE integration for notebook-to-pipeline conversion." → KALE is mandated as the solution, not offered as context.
+- H=1: "Short-term: hardcode the ingress hostname in the operator. Long-term: expose a CRD field for hostname configuration." → Suggests specific approaches but doesn't fully mandate.
+- H=2: "Expose the service externally via an OpenShift Route with re-encrypt TLS, matching existing Ingress Operator conventions." → Platform vocabulary, not architecture prescription.
+- H=2: "Administrators can explicitly force reconciliation of a stuck Operator and clear stale status conditions." → Describes the need without prescribing implementation.
+- H=2: "Expose REST API endpoints for programmatic route creation." → API surface is WHAT, not architecture.
+- H=2: "Detect when cluster configuration has drifted from its desired baseline." → Observable outcome. Engineering chooses the detection method.
+- H=1: "Parse audit logs for API request spans and cluster common failures by similarity." → Prescribes the technique (log parsing, similarity clustering) rather than the outcome (identify recurring failure patterns).
+- H=2: "Users need multi-cloud infrastructure provisioning without writing Terraform. Context: Crossplane and Config Connector are existing projects that address this; engineering should evaluate these and other approaches." → Need is clear without the context. Engineering is free to choose.
+- H=1: "Build Crossplane integration for multi-cloud infrastructure provisioning." → Crossplane is mandated as the solution, not offered as context.
 
 #### Not a task
 - T=0: "Rename Trustyai-explainability to TrustyAI" with description "Look at the title." → Pure housekeeping. No customer-facing need.
