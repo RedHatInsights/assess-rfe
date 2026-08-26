@@ -6,7 +6,7 @@
   "plugins": [
     {
       "name": "assess-rfe",
-      "description": "Assess RFE quality against a scoring rubric with calibration examples and RHOAI platform vocabulary awareness.",
+      "description": "Assess RFE quality with status-specific Backlog and Refinement criteria and calibration examples.",
       "source": "."
     }
   ]

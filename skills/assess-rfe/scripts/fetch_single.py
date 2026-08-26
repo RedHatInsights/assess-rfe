@@ -9,7 +9,8 @@ Usage:
     python3 scripts/fetch_single.py RHAIRFE-1234
 
 Requires JIRA_SERVER, JIRA_USER, JIRA_TOKEN environment variables.
-Writes to tmp/rfe-assess/single/{KEY}.md in the same format as dump_jira.py.
+Writes the title, status, and description to tmp/rfe-assess/single/{KEY}.md
+in the same format as dump_jira.py.
 """
 
 import os
@@ -48,7 +49,7 @@ def main():
         sys.exit(1)
 
     base = server.rstrip("/")
-    url = f"{base}/rest/api/3/issue/{key}?fields=summary,description"
+    url = f"{base}/rest/api/3/issue/{key}?fields=summary,description,status"
 
     try:
         data = make_request(url, user, token)
@@ -58,16 +59,21 @@ def main():
 
     fields = data.get("fields", {})
     summary = fields.get("summary", "")
+    status = fields.get("status") or {}
+    status_name = (
+        status.get("name", "Unknown") if isinstance(status, dict) else str(status)
+    )
     description = adf_to_markdown(fields.get("description")).strip()
 
     single_dir = "tmp/rfe-assess/single"
     os.makedirs(single_dir, exist_ok=True)
     filepath = os.path.join(single_dir, f"{key}.md")
     with open(filepath, "w", encoding="utf-8") as f:
-        f.write(f"# {key}: {summary}\n\n{description}\n")
+        f.write(f"# {key}: {summary}\n\nStatus: {status_name}\n\n{description}\n")
 
     print(f"FILE={filepath}")
     print(f"SUMMARY={summary}")
+    print(f"STATUS={status_name}")
 
 
 if __name__ == "__main__":

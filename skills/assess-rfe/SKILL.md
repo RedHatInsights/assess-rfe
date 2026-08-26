@@ -1,6 +1,6 @@
 ---
 name: assess-rfe
-description: Assess RFEs against quality criteria. Pass a Jira issue key, file path, URL, raw text, or wildcard for bulk.
+description: Assess RFEs with status-specific Backlog and Refinement criteria. Pass a Jira issue key, file path, URL, raw text, or wildcard for bulk.
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Agent, TaskGet, mcp__atlassian__getJiraIssue, mcp__atlassian__searchJiraIssuesUsingJql
 ---
 
@@ -49,15 +49,17 @@ tmp/rfe-assess/single/               # single-mode temp files
 
 Detect the input type:
 - **Jira issue key** (matches `[A-Z]+-\d+`): Try MCP first, then fall back to the REST API:
-  1. **Try MCP:** Call `mcp__atlassian__getJiraIssue` with the key and `cloudId="https://redhat.atlassian.net"`. If the call succeeds, extract the summary and description.
+  1. **Try MCP:** Call `mcp__atlassian__getJiraIssue` with the key and `cloudId="https://redhat.atlassian.net"`. If the call succeeds, extract the summary, status, and description.
   2. **Fallback to REST API:** If the MCP call fails (tool not available, connection error, or any other error), fall back to the Jira REST API by running `python3 ${CLAUDE_SKILL_DIR}/scripts/fetch_single.py {KEY}`. This requires `JIRA_SERVER` (or `JIRA_URL`/`JIRA_BASE_URL`), `JIRA_USER` (or `JIRA_EMAIL`), and `JIRA_TOKEN` (or `JIRA_API_TOKEN`) environment variables. The script fetches the issue, converts ADF to markdown, and writes it directly to `tmp/rfe-assess/single/{KEY}.md`. Parse its output for `ENV_OK=false` / `ENV_MISSING=...` — if env vars are missing, prompt the user to set them (same guidance as Phase 0 of bulk mode). If the script succeeds, skip the Write step below since the script already wrote the file.
 - **File path** (starts with `/` or `./` or `~`, or exists on disk): Read the file contents.
 - **URL** (starts with `http://` or `https://`): Fetch the content.
 - **Raw text**: Use the input directly as the content to assess.
 
+Determine the issue status before assessing. For a Jira issue, use its current Jira status. For a file, URL, or raw text, look for an explicit status. If none is present, ask the user whether it should be assessed as `Backlog` or `Refinement`; do not guess. Only those two statuses are graded.
+
 Then assess:
 1. Run `python3 ${CLAUDE_SKILL_DIR}/scripts/prep_single.py {KEY}` to clean up stale files and ensure the output directory exists. This removes any previous `.md` and `.result.md` for the key so Write sees them as new files.
-2. Write the fetched content to `tmp/rfe-assess/single/{KEY}.md` using the same `# KEY: Title` format as the cache files. For non-Jira inputs, use a descriptive key (e.g., filename or `INPUT`). This is a separate directory from the bulk cache — never write single-mode files into `/tmp/rfe-assess/RHAIRFE/` as that would clobber cached bulk data. **Note:** If the REST API fallback (`fetch_single.py`) was used, the file is already written — skip this step.
+2. Write the fetched content to `tmp/rfe-assess/single/{KEY}.md` using the cache-file format: a `# KEY: Title` heading, a blank line, `Status: <status>`, another blank line, and the description. For non-Jira inputs, use a descriptive key (e.g., filename or `INPUT`). This is a separate directory from the bulk cache — never write single-mode files into `/tmp/rfe-assess/RHAIRFE/` as that would clobber cached bulk data. **Note:** If the REST API fallback (`fetch_single.py`) was used, the file is already written — skip this step.
 3. Spawn one background agent (model: opus, run_in_background: true, subagent_type: assess-rfe:rfe-scorer) using the same launch prompt as Phase 2, with `{DATA_FILE}` set to `tmp/rfe-assess/single/{KEY}.md` and `{RUN_DIR}` set to `tmp/rfe-assess/single`.
 4. Read the result from `tmp/rfe-assess/single/{KEY}.result.md`, wrap it with a header, and present it to the user.
 
@@ -76,7 +78,7 @@ Then assess:
   - If there is an incomplete current run (`CURRENT_COMPLETE=false`), inform the user it will be resumed.
 
 **Phase 1: Fetch all issues to local files.**
-- Run `python3 ${CLAUDE_SKILL_DIR}/scripts/dump_jira.py RHAIRFE` to fetch every issue in the project via the Jira REST API. This writes one file per issue to `/tmp/rfe-assess/RHAIRFE/` (e.g., `RHAIRFE-42.md`). The script renders Jira's ADF content as proper markdown, preserving headings, lists, tables, links, and emphasis.
+- Run `python3 ${CLAUDE_SKILL_DIR}/scripts/dump_jira.py RHAIRFE` to fetch every issue in the project via the Jira REST API. This writes one file per issue to `/tmp/rfe-assess/RHAIRFE/` (e.g., `RHAIRFE-42.md`) containing its title, status, and description. The script renders Jira's ADF content as proper markdown, preserving headings, lists, tables, links, and emphasis.
 
 **Phase 1.5: Set up run directory.**
 - Run `python3 ${CLAUDE_SKILL_DIR}/scripts/setup_run.py RHAIRFE` (add `--limit N` if the user requested a subset).
@@ -129,7 +131,7 @@ directory, progress, and these loop steps after every compaction.
 
 **Phase 3: Present results.**
 - `scores.csv` already exists (produced by `next_action.py` when it reported `ACTION=done`).
-- Run `python3 ${CLAUDE_SKILL_DIR}/scripts/summarize_run.py {RUN_DIR}` to produce the full summary analysis (pass/fail counts, score distribution, criteria averages, zero-score counts, what-if analysis, near-miss failures). Present the output to the user.
+- Run `python3 ${CLAUDE_SKILL_DIR}/scripts/summarize_run.py {RUN_DIR}` to produce separate Backlog and Refinement score distributions, criterion averages, reclassification counts, and ungraded-status counts. Present the output to the user.
 
 ### Agent Prompt Template
 
@@ -147,17 +149,18 @@ Single issue — wrap agent output with a header:
 ```
 
 Bulk — after Phase 3, present the summary analysis from the CSV to the user. Include:
-- Total assessed, passed, failed, pass rate
-- Score distribution
-- Criteria averages and zero-score counts
-- What-if analysis (e.g., "if WHY 0→1, N more would pass")
-- Top near-miss failures (high scores but auto-failed by a zero)
+- Counts graded in Backlog and Refinement
+- Count stopped because the issue was misclassified
+- Count not graded because the issue had another status
+- Separate Backlog and Refinement score distributions (never combine workflow stages)
+- Per-criterion averages and zero-score counts
+- Issues requiring reclassification
 
 ### Scripts Reference
 
 | Script | Purpose |
 |--------|---------|
-| `dump_jira.py` | Fetches all issues from a Jira project via REST API v3, converts ADF to markdown, writes to `/tmp/rfe-assess/<PROJECT>/` |
+| `dump_jira.py` | Fetches issue titles, statuses, and descriptions from a Jira project via REST API v3, converts ADF to markdown, and writes to `/tmp/rfe-assess/<PROJECT>/` |
 | `preflight.py` | Checks env vars, cache state, and current run status |
 | `setup_run.py` | Creates timestamped run directory with resume support (detects incomplete runs via `current` symlink) |
 | `agent_prompt.md` | Full scoring rubric and instructions for assessment agents — use verbatim |
@@ -166,10 +169,10 @@ Bulk — after Phase 3, present the summary analysis from the CSV to the user. I
 | `next_batch.py` | (Superseded by `next_action.py` for the bulk loop.) Pops the next N keys from the queue file by mutating it |
 | `check_progress.py` | Reports completed vs total issues for a run directory (used by `dispatch_context.py`) |
 | `dispatch_context.py` | Post-compaction recovery: re-injects the active run's state and loop steps; invoked by the `SessionStart` compact hook (`hooks/hooks.json`) |
-| `parse_results.py` | Extracts scores from `.result.md` files into `scores.csv`; handles format variants |
+| `parse_results.py` | Extracts status-specific scores and outcomes from `.result.md` files into `scores.csv` |
 | `fetch_single.py` | Fetches a single Jira issue via REST API v3 (fallback for when MCP is unavailable), writes to `tmp/rfe-assess/single/` |
 | `prep_single.py` | Cleans up stale data/result files for a key in `tmp/rfe-assess/single/` before a single-mode run |
-| `summarize_run.py` | Produces summary analysis from `scores.csv`: pass/fail rates, criteria averages, what-if analysis, near-misses |
+| `summarize_run.py` | Produces separate Backlog and Refinement summaries, criterion averages, reclassification counts, and ungraded-status counts from `scores.csv` |
 
 ### Required Permissions
 
