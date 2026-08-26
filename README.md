@@ -4,7 +4,7 @@ Claude Code plugin for assessing RFEs against quality criteria using a structure
 
 ## Skills
 
-- **assess-rfe** — Score RFEs on five criteria (WHAT, WHY, Open to HOW, Not a task, Right-sized) with single-issue and bulk assessment modes
+- **assess-rfe** — Apply a status-aware RFE rubric in single-issue or bulk mode: Misclassified, WHAT, WHY, and Strategic in Backlog; HOW and Well-Scoped in Refinement
 - **export-rubric** — Export the scoring rubric to a standalone markdown file
 
 ## Installation

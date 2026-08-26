@@ -39,7 +39,7 @@ def get_all_issues(server, user, token, project_key, batch_size=100):
             f"{base}/rest/api/3/search/jql"
             f"?jql={jql}"
             f"&maxResults={batch_size}"
-            f"&fields=summary,description"
+            f"&fields=summary,description,status"
         )
         if next_page_token:
             url += f"&nextPageToken={urllib.parse.quote(next_page_token)}"
@@ -241,10 +241,14 @@ def main():
         key = issue.get("key", "unknown")
         fields = issue.get("fields", {})
         summary = fields.get("summary", "")
+        status = fields.get("status") or {}
+        status_name = (
+            status.get("name", "Unknown") if isinstance(status, dict) else str(status)
+        )
         description = adf_to_markdown(fields.get("description")).strip()
         filepath = os.path.join(output_dir, f"{key}.md")
         with open(filepath, "w", encoding="utf-8") as f:
-            f.write(f"# {key}: {summary}\n\n{description}\n")
+            f.write(f"# {key}: {summary}\n\nStatus: {status_name}\n\n{description}\n")
         count += 1
         if count % 100 == 0:
             print(f"  {count} issues dumped...", file=sys.stderr)
